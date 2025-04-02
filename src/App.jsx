@@ -9,7 +9,7 @@ import {
   SignInButton,
   UserButton,
 } from "@clerk/clerk-react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 const App = () => {
   return (
@@ -25,7 +25,19 @@ const App = () => {
         </Header>
         <Routes>
           <Route path="/" element={<Hero />} />
-          <Route path="/debugger" element={<DebuggerChatbot />} />
+          <Route
+            path="/debugger"
+            element={
+              <>
+                <SignedIn>
+                  <DebuggerChatbot />
+                </SignedIn>
+                <SignedOut>
+                  <Navigate to="/" replace />
+                </SignedOut>
+              </>
+            }
+          />
         </Routes>
         {window.location.pathname !== "/debugger" && <Footer />}
       </div>
@@ -33,5 +45,4 @@ const App = () => {
     </>
   );
 };
-
 export default App;
