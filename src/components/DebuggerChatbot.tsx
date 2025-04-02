@@ -13,45 +13,11 @@ import { CopyToClipboard } from "react-copy-to-clipboard";
 import AWS from "aws-sdk";
 import { useUser } from "@clerk/clerk-react";
 import { FaHistory, FaExclamationTriangle, FaSpinner } from "react-icons/fa";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { debounce, throttle } from "lodash";
 
-interface ChatMessage {
-  id: string;
-  sender: "user" | "aws";
-  text: string;
-  isMarkdown?: boolean;
-  timestamp: number;
-}
-
-interface ServerResponse {
-  statusCode: number;
-  body: string;
-  error?: string;
-}
-
-interface ChatHistoryResponse {
-  chatHistory: ChatMessage[];
-}
-
-interface ChatSession {
-  id: string;
-  name: string;
-  timestamp: number;
-  messages: ChatMessage[];
-  searchHistory: string[];
-}
-
-interface LambdaResponse {
-  statusCode: number;
-  body: string;
-  error?: string;
-}
-
-interface Props {
-  params: { subaccountId: string };
-}
+// Interfaces removed as they are TypeScript specific
 
 const AWS_CONFIG = {
   region: import.meta.env.VITE_AWS_REGION || "ap-south-1",
@@ -74,37 +40,54 @@ const lambda = new AWS.Lambda({
   httpOptions: { timeout: 30000 },
 });
 
-const DebuggerChatbot = ({ params }: Props) => {
+const DebuggerChatbot = ({ params }) => {
+  // Removed : Props type annotation
   const { user } = useUser();
-  interface Metrics {
-    logEvents: number;
-    errors: number;
-    throttled: number;
-  }
-
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
-  const [cloudWatchLogs, setCloudWatchLogs] = useState<string[]>([]);
+  const [cloudWatchLogs, setCloudWatchLogs] = useState([]); // Removed <string[]> type
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [searchHistory, setSearchHistory] = useState([]); // Removed <string[]> type
+  const [messages, setMessages] = useState([]); // Removed <ChatMessage[]> type
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>(uuidv4());
-  const [metrics, setMetrics] = useState<Metrics>({
+  const [chatSessions, setChatSessions] = useState([]); // Removed <ChatSession[]> type
+  const [currentSessionId, setCurrentSessionId] = useState("");
+  const [metrics, setMetrics] = useState({
+    // Removed <Metrics> type
     logEvents: 0,
     errors: 0,
     throttled: 0,
   });
+  const [deletingId, setDeletingId] = useState(null); // Removed <string | null> type
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef(null); // Removed <HTMLDivElement> type
+  const abortControllerRef = useRef(null); // Removed <AbortController | null> type
 
-  const handleError = useCallback((error: unknown) => {
+  const createNewSession = () => ({
+    // Removed return type : ChatSession
+    id: uuidv4(),
+    name: "New Chat",
+    timestamp: Date.now(),
+    messages: [],
+    searchHistory: [],
+    isNew: true,
+  });
+
+  const generateSessionTitle = (messages) => {
+    // Removed parameter type : ChatMessage[] and return type : string
+    const firstMessage = messages.find((m) => m.sender === "user");
+    return (
+      firstMessage?.text.substring(0, 50) +
+        (firstMessage?.text.length > 50 ? "..." : "") || "New Chat"
+    );
+  };
+
+  const handleError = useCallback((error) => {
+    // Removed parameter type : unknown
     let errorMessage = "An unexpected error occurred";
     if (error instanceof Error) {
       errorMessage = error.message;
@@ -125,7 +108,8 @@ const DebuggerChatbot = ({ params }: Props) => {
 
   const updateSearchHistory = useMemo(
     () =>
-      debounce((term: string) => {
+      debounce((term) => {
+        // Removed parameter type : string
         setSearchHistory((prev) => [
           term,
           ...prev.filter((t) => t !== term).slice(0, 9),
@@ -133,6 +117,90 @@ const DebuggerChatbot = ({ params }: Props) => {
       }, 500),
     []
   );
+
+  const persistSessions = useCallback(
+    (sessions) => {
+      // Removed parameter type : ChatSession[]
+      try {
+        localStorage.setItem("chatSessions", JSON.stringify(sessions));
+      } catch (err) {
+        handleError("Failed to save chat history");
+      }
+    },
+    [handleError]
+  );
+
+  const switchSession = (sessionId) => {
+    // Removed parameter type : string
+    setCurrentSessionId(sessionId);
+    const session = chatSessions.find((s) => s.id === sessionId);
+    setMessages(session?.messages || []);
+    setSearchHistory(session?.searchHistory || []);
+  };
+
+  const deleteChatSession = async (sessionId) => {
+    // Removed parameter type : string
+    if (!confirm("Are you sure you want to delete this chat?")) return;
+
+    try {
+      setDeletingId(sessionId);
+
+      // Delete from database if user is logged in
+      if (user) {
+        await fetch(
+          `${import.meta.env.VITE_API_URL}/api/users/chat/${sessionId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Delete locally
+      setChatSessions((prev) =>
+        prev.filter((session) => session.id !== sessionId)
+      );
+
+      // If deleting current session, switch to a new one
+      if (sessionId === currentSessionId) {
+        const newSession = createNewSession();
+        setChatSessions((prev) => [newSession, ...prev]);
+        switchSession(newSession.id);
+      }
+    } catch (err) {
+      handleError(
+        err instanceof Error ? err : new Error("Failed to delete chat")
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleNewChat = () => {
+    // Generate title for current session
+    const currentSession = chatSessions.find((s) => s.id === currentSessionId);
+    if (currentSession?.messages.length) {
+      setChatSessions((prev) =>
+        prev.map((session) => {
+          if (session.id === currentSessionId) {
+            return {
+              ...session,
+              name: generateSessionTitle(session.messages),
+              isNew: false,
+            };
+          }
+          return session;
+        })
+      );
+    }
+
+    // Create new session
+    const newSession = createNewSession();
+    setChatSessions((prev) => [newSession, ...prev]);
+    switchSession(newSession.id);
+  };
 
   const fetchCloudWatchMetrics = useCallback(async () => {
     try {
@@ -223,19 +291,21 @@ const DebuggerChatbot = ({ params }: Props) => {
       const logs = data.events?.map((e) => e.message) || [];
       setCloudWatchLogs(logs);
     } catch (err) {
-      if ((err as Error).name !== "AbortError") handleError(err);
+      if (err.name !== "AbortError") handleError(err); // Removed type assertion (err as Error)
     }
   }, [handleError]);
 
   const handleSearch = useMemo(
     () =>
-      throttle(async (term: string) => {
+      throttle(async (term) => {
+        // Removed parameter type : string
         if (!term.trim()) return;
         try {
           setLoading(true);
           setError("");
           setSearchTerm("");
-          const newMessage: ChatMessage = {
+          const newMessage = {
+            // Removed type annotation : ChatMessage
             id: uuidv4(),
             sender: "user",
             text: term,
@@ -256,6 +326,7 @@ const DebuggerChatbot = ({ params }: Props) => {
                   body: JSON.stringify({
                     userId: user.id,
                     message: newMessage,
+                    sessionId: currentSessionId,
                   }),
                 }
               );
@@ -276,12 +347,14 @@ const DebuggerChatbot = ({ params }: Props) => {
             .promise();
           if (response.FunctionError)
             throw new Error(`Lambda Error: ${response.Payload}`);
-          const result: LambdaResponse = JSON.parse(response.Payload as string);
+
+          const result = JSON.parse(response.Payload); // Removed type : LambdaResponse and assertion as string
           if (result.statusCode >= 400)
             throw new Error(result.error || "Lambda invocation failed");
           const responseData = JSON.parse(result.body);
           const awsResponse = responseData.response || "No response from AWS";
-          const responseMessage: ChatMessage = {
+          const responseMessage = {
+            // Removed type annotation : ChatMessage
             id: uuidv4(),
             sender: "aws",
             text: awsResponse,
@@ -297,70 +370,57 @@ const DebuggerChatbot = ({ params }: Props) => {
           scrollToBottom();
         }
       }, 1000),
-    [handleError, scrollToBottom, updateSearchHistory, user]
-  );
-
-  const persistSessions = useCallback(
-    (sessions: ChatSession[]) => {
-      try {
-        localStorage.setItem("chatSessions", JSON.stringify(sessions));
-      } catch (err) {
-        handleError("Failed to save chat history");
-      }
-    },
-    [handleError]
+    [handleError, scrollToBottom, updateSearchHistory, user, currentSessionId]
   );
 
   // Load chat sessions from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("chatSessions");
-      if (saved) setChatSessions(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setChatSessions(parsed);
+        if (parsed.length > 0) {
+          switchSession(parsed[0].id);
+        } else {
+          const newSession = createNewSession();
+          setChatSessions([newSession]);
+          switchSession(newSession.id);
+        }
+      } else {
+        const newSession = createNewSession();
+        setChatSessions([newSession]);
+        switchSession(newSession.id);
+      }
     } catch (err) {
       handleError("Failed to load chat history");
+      const newSession = createNewSession();
+      setChatSessions([newSession]);
+      switchSession(newSession.id);
     }
-  }, [handleError]);
+  }, [handleError]); // Note: Added handleError dependency based on usage
 
-  // Fetch chat history when component mounts
+  // Update session when messages/searchHistory change
   useEffect(() => {
-    const fetchChatHistory = async () => {
-      if (!user) return;
-      try {
-        const apiUrl = `${import.meta.env.VITE_API_URL}/api/users/chat/${
-          user.clerkId
-        }?page=${currentPage}&limit=50`;
-        if (!apiUrl.startsWith("http")) {
-          throw new Error(`Invalid API URL: ${apiUrl}`);
+    setChatSessions((prev) =>
+      prev.map((session) => {
+        if (session.id === currentSessionId) {
+          return {
+            ...session,
+            messages,
+            searchHistory,
+            isNew: messages.length > 0 ? false : session.isNew,
+          };
         }
+        return session;
+      })
+    );
+  }, [messages, searchHistory, currentSessionId]);
 
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to fetch chat history: ${errorText}`);
-        }
-
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          // If we got HTML, it's likely a wrong URL or server error
-          if (contentType?.includes("text/html")) {
-            throw new Error(
-              "Server returned HTML instead of JSON. Check API URL configuration."
-            );
-          }
-          const text = await response.text();
-          throw new Error(`Expected JSON but got: ${contentType || "unknown"}`);
-        }
-
-        const data = await response.json();
-        setMessages(data.messages || []);
-        setTotalPages(data.totalPages || 1);
-      } catch (err) {
-        console.error("Error fetching chat history:", err);
-        handleError(err instanceof Error ? err : new Error(String(err)));
-      }
-    };
-    fetchChatHistory();
-  }, [user, currentPage, handleError]);
+  // Persist sessions when they change
+  useEffect(() => {
+    persistSessions(chatSessions);
+  }, [chatSessions, persistSessions]);
 
   // Fetch metrics and logs
   useEffect(() => {
@@ -386,7 +446,9 @@ const DebuggerChatbot = ({ params }: Props) => {
   }, [updateSearchHistory, handleSearch]);
 
   const renderMessage = useCallback(
-    (message: ChatMessage) => (
+    (
+      message // Removed parameter type : ChatMessage
+    ) => (
       <ErrorBoundary key={message.id}>
         <div
           className={`flex items-center ${
@@ -458,6 +520,7 @@ const DebuggerChatbot = ({ params }: Props) => {
 
   return (
     <div className="flex flex-col lg:flex-row bg-gray-900 text-gray-100">
+      {/* Kept the style tag exactly as provided */}
       <style jsx="true" global="true">{`
         .deepseek-scroll {
           scrollbar-width: none;
@@ -494,8 +557,8 @@ const DebuggerChatbot = ({ params }: Props) => {
       {/* Toggle Button */}
       <button
         onClick={toggleMetrics}
-        className={`hidden lg:flex items-center justify-center absolute top-1/2 -translate-y-1/2 z-30 
-          ${showMetrics ? "left-[calc(25%-12px)]" : "left-0"} 
+        className={`hidden lg:flex items-center justify-center absolute top-1/2 -translate-y-1/2 z-30
+          ${showMetrics ? "left-[calc(25%-12px)]" : "left-0"}
           w-6 h-12 bg-gray-800 hover:bg-gray-700 rounded-r-lg`}
       >
         {showMetrics ? (
@@ -589,9 +652,7 @@ const DebuggerChatbot = ({ params }: Props) => {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Chat History</h3>
           <button
-            onClick={() => {
-              setMessages([]);
-            }}
+            onClick={handleNewChat}
             className="w-[130px] text-center p-2 bg-orange-400 rounded-full hover:bg-orange-500 transition-colors text-white"
           >
             New Chat
@@ -604,14 +665,48 @@ const DebuggerChatbot = ({ params }: Props) => {
           </button>
         </div>
         <div className="space-y-2 overflow-y-auto h-[calc(100vh-4rem)] overflow-hidden">
-          {searchHistory.map((term, i) => (
-            <button
-              key={i}
-              onClick={() => setSearchTerm(term)}
-              className="w-full text-left p-2 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+          {chatSessions.map((session) => (
+            <div
+              key={session.id}
+              className={`group flex items-center justify-between w-full p-2 rounded hover:bg-gray-700 transition-colors truncate
+                ${
+                  session.id === currentSessionId
+                    ? "bg-blue-800/50"
+                    : "bg-gray-800"
+                }`}
             >
-              {term}
-            </button>
+              <button
+                onClick={() => switchSession(session.id)}
+                className="flex-1 text-left truncate"
+                title={session.name}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="truncate">{session.name}</span>
+                  {session.isNew && (
+                    <span className="text-green-400 text-xs">New</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {new Date(session.timestamp).toLocaleString()}
+                </div>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteChatSession(session.id);
+                }}
+                className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Delete chat"
+                disabled={deletingId === session.id}
+              >
+                {deletingId === session.id ? (
+                  <FaSpinner className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -646,12 +741,14 @@ const DebuggerChatbot = ({ params }: Props) => {
   );
 };
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
+// Removed type annotation from ErrorBoundary props
+class ErrorBoundary extends React.Component {
   state = { hasError: false };
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(error: Error) {
+  componentDidCatch(error) {
+    // Removed parameter type : Error
     console.error("Component Error:", error);
   }
   render() {
