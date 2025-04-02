@@ -21,17 +21,14 @@ Brainwave is a powerful AI-powered chat application built with modern technologi
 - **Frontend**: React.js with Vite, Tailwind CSS
 - **Authentication**: Clerk
 - **Cloud Services**: AWS Lambda, AWS Region (ap-south-1)
-- **Database**: MongoDB
 - **Development Tools**: ESLint, PostCSS
 
 ## Prerequisites
 
 - Node.js (v14 or higher)
 - npm or yarn package manager
-- MongoDB account
 - Clerk account for authentication
 - AWS account with appropriate credentials
-- Google Cloud account for Gemini API
 
 ## Environment Setup
 
@@ -39,16 +36,11 @@ Brainwave is a powerful AI-powered chat application built with modern technologi
 
 ```env
 VITE_CLERK_PUBLISHABLE_KEY=your_clerk_key
-CLERK_SECRET_KEY=your_clerk_secret
-VITE_GEMINI_API_KEY=your_gemini_api_key
-MONGO_URI=your_mongodb_uri
-JWT_SECRET=your_jwt_secret
+CLERK_SECRET_KEY=your_clerk_secret_key
 VITE_AWS_REGION=your_aws_region
 VITE_AWS_ACCESS_KEY_ID=your_aws_access_key
 VITE_AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 VITE_AWS_LAMBDA_FUNCTION_NAME=your_lambda_function
-VITE_API_URL=http://localhost:5000
-PORT=5000
 ```
 
 ## Installation
@@ -56,8 +48,8 @@ PORT=5000
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/prashant-sagar-shakya/Brainwave.git
-cd Brainwave
+git clone https://github.com/prashant-sagar-shakya/Brainwave-AI-Debugger.git
+cd Brainwave-AI-Debugger
 ```
 
 2. Install dependencies:

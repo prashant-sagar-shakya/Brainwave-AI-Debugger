@@ -2,7 +2,6 @@ import ButtonGradient from "./assets/svg/ButtonGradient";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
 import Hero from "./components/Hero";
-import DebuggerChatbot from "./components/DebuggerChatbot";
 import {
   SignedIn,
   SignedOut,
@@ -10,6 +9,7 @@ import {
   UserButton,
 } from "@clerk/clerk-react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import AppLayout from "./components/AppLayout";
 
 const App = () => {
   return (
@@ -30,7 +30,7 @@ const App = () => {
             element={
               <>
                 <SignedIn>
-                  <DebuggerChatbot />
+                  <AppLayout />
                 </SignedIn>
                 <SignedOut>
                   <Navigate to="/" replace />
