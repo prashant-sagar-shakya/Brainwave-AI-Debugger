@@ -9,7 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus as dark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { CopyToClipboard } from "react-copy-to-clipboard";
-import AWS from "aws-sdk";
+import * as AWS from "aws-sdk";
 import { useUser } from "@clerk/clerk-react";
 import { FaHistory, FaExclamationTriangle, FaSpinner } from "react-icons/fa";
 import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
